@@ -1,0 +1,39 @@
+Financial Fraud Detection Using Value-at-Risk With Machine Learning in Skewed Data
+
+Detection rate, fraud detection, K-nearest neighbor, skewed instances, value-at-risk.
+
+IEEE Transaction on Machine Learning,Volume:12,Issue Date:24.April.2024
+
+
+Financial_Fraud_Detection
+
+financial_fraud_detection
+
+
+detect_financial_fraud
+
+
+
+Members
+---------
+
+
+Fid	
+trans_datetime	
+Acc_num	
+bankingtype	
+category	
+amt	
+Name	
+gender	
+street	
+city	
+zip	
+lat	
+lon	
+job	
+dob	
+trans_num	
+merch_lat	
+merch_long
+Prediction

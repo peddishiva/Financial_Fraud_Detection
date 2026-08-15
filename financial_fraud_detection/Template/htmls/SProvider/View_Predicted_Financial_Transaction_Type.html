@@ -1,0 +1,116 @@
+{% extends 'SProvider/Header.html' %}
+{% block researchblock %}
+
+
+<link rel="icon" href="images/icon.png" type="image/x-icon" />
+
+	<link href="https://fonts.googleapis.com/css?family=Lobster" rel="stylesheet">
+		<link href="https://fonts.googleapis.com/css?family=Righteous" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css?family=Fredoka+One" rel="stylesheet">
+
+
+
+		<style>
+			body {background-color:#000000;}
+			.container-fluid {padding:50px;}
+			.container{background-color:white;padding:50px;   }
+			#title{font-family: 'Fredoka One', cursive;
+}
+			.text-uppercase{
+			font-family: 'Righteous', cursive;
+
+			}
+			.tweettext{
+
+    border: 2px solid yellowgreen;
+    width: 1104px;
+    height: 442px;
+    overflow: scroll;
+    background-color:;
+}
+		.style1 {
+	color: #FF0000;
+	font-weight: bold;
+}
+        </style>
+
+	<body>
+	<div class="container-fluid">
+		<div class="container">
+
+			<div class="row">
+				<div class="col-md-5">
+ 					<form role="form" method="POST" >
+						{% csrf_token %}
+						<fieldset>
+							<p align="center" class="text-uppercase pull-center style1">View Predicted Financial Transaction Type </p>
+                            <hr>
+                            <div class="tweettext">
+                               <table border="5" align="center" bordercolor="#FF00FF">
+                               <tr>
+                                   <td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">Fid</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">trans_datetime</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">Acc_num</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">bankingtype</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">category</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">amt(Dollar)</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">Name</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">gender</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">street</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">city</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">zip</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">lat</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">lon</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">job</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">dob</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">trans_num</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">merch_lat</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">merch_long</span></div></td>
+<td bgcolor="#FFFF00"><div align="center" class="style1"><span class="style8 style6">Prediction</span></div></td>
+
+                      </tr>
+                            {% for object in list_objects %}
+                      <tr>
+
+                         <td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.Fid}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.trans_datetime}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.Acc_num}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.bankingtype}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.category}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.amt}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.Name}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.gender}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.street}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.city}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.zip}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.lat}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.lon}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.job}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.dob}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.trans_num}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.merch_lat}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.merch_long}}</td>
+<td bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" >{{object.Prediction}}</td>
+
+                        </tr>
+
+                                        {% endfor %}
+                      </table>
+
+                            </div>
+
+
+
+
+						</fieldset>
+					</form>
+				</div>
+
+				<div class="col-md-2">
+					<!-------null------>
+				</div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+    <tr>
