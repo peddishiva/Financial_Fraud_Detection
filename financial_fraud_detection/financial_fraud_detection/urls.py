@@ -1,7 +1,7 @@
 """financial_fraud_detection  URL Configuration
 
 The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/3.0/topics/http/urls/
+    https://docs.djangoproject.com/en/3.2/topics/http/urls/
 Examples:
 Function views
     1. Add an import:  from my_app import views
@@ -13,28 +13,28 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.conf.urls import url
+from django.urls import path, re_path
 from django.contrib import admin
 from Remote_User import views as remoteuser
-from financial_fraud_detection  import settings
+from financial_fraud_detection import settings
 from Service_Provider import views as serviceprovider
 from django.conf.urls.static import static
 
 
 urlpatterns = [
-    url('admin/', admin.site.urls),
-    url(r'^$', remoteuser.login, name="login"),
-    url(r'^Register1/$', remoteuser.Register1, name="Register1"),
-    url(r'^predict_financial_transaction_type/$', remoteuser.predict_financial_transaction_type, name="predict_financial_transaction_type"),
-    url(r'^ViewYourProfile/$', remoteuser.ViewYourProfile, name="ViewYourProfile"),
-    url(r'^serviceproviderlogin/$',serviceprovider.serviceproviderlogin, name="serviceproviderlogin"),
-    url(r'View_Remote_Users/$',serviceprovider.View_Remote_Users,name="View_Remote_Users"),
-    url(r'^charts/(?P<chart_type>\w+)', serviceprovider.charts,name="charts"),
-    url(r'^charts1/(?P<chart_type>\w+)', serviceprovider.charts1, name="charts1"),
-    url(r'^likeschart/(?P<like_chart>\w+)', serviceprovider.likeschart, name="likeschart"),
-    url(r'^View_Predicted_Financial_Transaction_Type_Ratio/$', serviceprovider.View_Predicted_Financial_Transaction_Type_Ratio, name="View_Predicted_Financial_Transaction_Type_Ratio"),
-    url(r'^Train_Test_DataSets/$', serviceprovider.Train_Test_DataSets, name="Train_Test_DataSets"),
-    url(r'^View_Predicted_Financial_Transaction_Type/$', serviceprovider.View_Predicted_Financial_Transaction_Type, name="View_Predicted_Financial_Transaction_Type"),
-    url(r'^Download_Trained_DataSets/$', serviceprovider.Download_Trained_DataSets, name="Download_Trained_DataSets"),
+    path('admin/', admin.site.urls),
+    re_path(r'^$', remoteuser.login, name="login"),
+    re_path(r'^Register1/$', remoteuser.Register1, name="Register1"),
+    re_path(r'^predict_financial_transaction_type/$', remoteuser.predict_financial_transaction_type, name="predict_financial_transaction_type"),
+    re_path(r'^ViewYourProfile/$', remoteuser.ViewYourProfile, name="ViewYourProfile"),
+    re_path(r'^serviceproviderlogin/$', serviceprovider.serviceproviderlogin, name="serviceproviderlogin"),
+    re_path(r'View_Remote_Users/$', serviceprovider.View_Remote_Users, name="View_Remote_Users"),
+    re_path(r'^charts/(?P<chart_type>\w+)', serviceprovider.charts, name="charts"),
+    re_path(r'^charts1/(?P<chart_type>\w+)', serviceprovider.charts1, name="charts1"),
+    re_path(r'^likeschart/(?P<like_chart>\w+)', serviceprovider.likeschart, name="likeschart"),
+    re_path(r'^View_Predicted_Financial_Transaction_Type_Ratio/$', serviceprovider.View_Predicted_Financial_Transaction_Type_Ratio, name="View_Predicted_Financial_Transaction_Type_Ratio"),
+    re_path(r'^Train_Test_DataSets/$', serviceprovider.Train_Test_DataSets, name="Train_Test_DataSets"),
+    re_path(r'^View_Predicted_Financial_Transaction_Type/$', serviceprovider.View_Predicted_Financial_Transaction_Type, name="View_Predicted_Financial_Transaction_Type"),
+    re_path(r'^Download_Trained_DataSets/$', serviceprovider.Download_Trained_DataSets, name="Download_Trained_DataSets"),
 
-]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
