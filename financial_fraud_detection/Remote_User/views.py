@@ -1,5 +1,6 @@
 import os
 import math
+from decimal import Decimal, InvalidOperation
 from django.conf import settings
 from django.contrib.auth.hashers import make_password, check_password
 from django.db.models import Count
@@ -75,6 +76,16 @@ def _normalize_reference_value(column, value):
     value = str(value).strip()
     if value.lower() in {"none", "null", "nan"}:
         return ""
+    if column == "Acc_num":
+        # Dataset account IDs may be stored in scientific notation. Normalize
+        # both scientific notation and fully expanded digit strings exactly.
+        try:
+            number = Decimal(value.replace(",", ""))
+            if number.is_finite():
+                return format(number.quantize(Decimal("1")), "f")
+        except (InvalidOperation, ValueError):
+            return value.casefold()
+        return value.casefold()
     if column in {"amt", "lat", "long", "merch_lat", "merch_long"}:
         try:
             return format(float(value), ".10g")
