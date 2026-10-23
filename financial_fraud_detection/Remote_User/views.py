@@ -57,6 +57,61 @@ def ViewYourProfile(request):
 
 
 
+def _get_dataset_path():
+    return os.path.join(settings.BASE_DIR, "Datasets.csv")
+
+
+def _read_reference_dataset():
+    return pd.read_csv(
+        _get_dataset_path(),
+        dtype={"Acc_num": "string", "zip": "string", "Fid": "string", "trans_num": "string"},
+    )
+
+
+def _normalize_value(column, value):
+    if value is None:
+        return ""
+    value = str(value).strip()
+    if value.lower() in {"none", "null", "nan"}:
+        return ""
+    if column in {"amt", "lat", "long", "merch_lat", "merch_long"}:
+        try:
+            return format(float(value), ".10g")
+        except (TypeError, ValueError):
+            return value
+    if column == "trans_datetime":
+        try:
+            return pd.to_datetime(value, dayfirst=True, errors="raise").strftime("%Y-%m-%d %H:%M")
+        except (TypeError, ValueError):
+            return value
+    if column == "dob":
+        try:
+            return pd.to_datetime(value, dayfirst=True, errors="raise").strftime("%Y-%m-%d")
+        except (TypeError, ValueError):
+            return value
+    return value.casefold()
+
+
+def _verify_reference_record(submitted, dataset):
+    columns = [
+        "Fid", "trans_datetime", "Acc_num", "bankingtype", "category", "amt",
+        "Name", "gender", "street", "city", "zip", "lat", "long", "job",
+        "dob", "trans_num", "merch_lat", "merch_long",
+    ]
+    form = dict(submitted)
+    form["long"] = submitted.get("lon", "")
+    for _, row in dataset.iterrows():
+        if all(
+            _normalize_value(col, form.get(col, "")) == _normalize_value(col, row.get(col, ""))
+            for col in columns
+        ):
+            try:
+                return int(row["Label"]), True
+            except (TypeError, ValueError):
+                return None, True
+    return 1, False
+
+
 def predict_financial_transaction_type(request):
     if request.method != "POST":
         return render(request, "RUser/predict_financial_transaction_type.html")
