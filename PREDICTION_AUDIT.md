@@ -1,29 +1,25 @@
 # Prediction audit and fix report
 
-## Findings from the original `main` branch
+## Findings from main
 
-- `Remote_User/views.py::predict_financial_transaction_type` read the dashboard fields but built `X = df['Fid']`, trained `CountVectorizer` on that one identifier field during every POST, and inferred from only the submitted `Fid`. Changing amount, category, customer details, or merchant coordinates therefore could not affect model inputs.
-- `Service_Provider/views.py::Train_Test_DataSets` also trained/evaluated classifiers on `Fid` only. It did not save those trained models; its displayed metrics were for separate fits and a random split without a fixed seed.
-- The old training code used a non-stratified random split and reported accuracy but did not use the complete transaction record. Its scores do not establish that all dashboard fields are validated.
-- The dashboard's customer longitude field is named `lon`, while the CSV column is `long`.
-- The CSV target column is `Label`; the implementation must respect each exact matched record's own label, not treat every matched record as legitimate.
+- `Remote_User/views.py::predict_financial_transaction_type` read every dashboard field, but built features from `df['Fid']` only and inferred from only the submitted `Fid`. Therefore changing amount, category, customer data or coordinates did not change the model input.
+- `Service_Provider/views.py::Train_Test_DataSets` also evaluated classifiers on `Fid` alone and did not persist those models for inference. The displayed metric is not evidence that the full transaction form is being evaluated.
+- The dashboard names customer longitude `lon`; the CSV uses `long`.
+- The dataset contains both `Label=0` and `Label=1`, so exact matches must follow their actual label.
 
-## Changes on this branch
+## Current branch behavior
 
-The prediction view now has an explicit exact-record integrity checker using the submitted form fields against the dataset fields, with basic normalization for dates, numbers, and case/whitespace. Exact matches return the actual `Label`: 0 -> Fraud Not Detected; 1 -> Fraud Detected. A record that does not match any row is flagged as Fraud Detected under this strict policy. Required fields, amount, coordinate ranges, and dataset availability are validated; errors are shown instead of silently falling back to class 0. The result cell exposes a live status region for accessibility.
+The endpoint uses a strict exact-record integrity check: it compares the complete submitted feature set to the CSV after basic normalization. Exact matches use their recorded label (0 => Fraud Not Detected, 1 => Fraud Detected); any record with no exact match is flagged as Fraud Detected. Errors are shown rather than silently defaulting to class 0. This is an explicit record-verification policy, **not a trained ML model predicting unseen transactions**.
 
-This is deliberately an **exact-record integrity policy**, not an ML fraud-classifier prediction. It follows the requested demonstration rule; it does not prove that every changed real-world transaction is fraudulent. A separate properly trained model using appropriate transaction features is still needed for generalization to unseen transactions.
+## Regression tests
 
-## Regression tests added
+Added `Remote_User/test_prediction_integrity.py` for exact label-0/label-1 rows, amount changes, one-field changes, and dataset schema/row count.
 
-`Remote_User/test_prediction_integrity.py` tests an exact label-0 record, exact label-1 record, amount mutation, single-field mutations across the form fields, and the dataset path/column count.
-
-Run in the Django project directory:
-
+Run from the directory containing `manage.py`:
 ```powershell
 python manage.py test Remote_User.test_prediction_integrity
 ```
 
 ## Limitation
 
-The GitHub connector can inspect and commit code, but this environment did not run the Django server/database or execute these tests against the user's local machine. Run the command above locally before merging. The test assumes the local CSV has the same schema and 1,149 records as the checked-in dataset.
+The GitHub connector did not run this Django app or its tests against a local database/server. Run the command locally before merging. A separate properly trained and evaluated full-feature model is still needed for classification of unseen transactions.
