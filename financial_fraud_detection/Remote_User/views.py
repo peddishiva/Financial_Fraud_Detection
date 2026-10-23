@@ -64,141 +64,187 @@ def ViewYourProfile(request):
     return render(request,'RUser/ViewYourProfile.html',{'object':obj})
 
 
+def _get_dataset_path():
+    """Return the canonical project dataset path."""
+    return os.path.join(settings.BASE_DIR, "Datasets.csv")
+
+
+def _read_reference_dataset():
+    """Read the dataset without converting identifiers such as account numbers to floats."""
+    return pd.read_csv(_get_dataset_path(), dtype={"Acc_num": "string", "zip": "string", "Fid": "string", "trans_num": "string"})
+
+
+def _normalize_value(column, value):
+    """Normalize values for strict record verification while preserving identifier text."""
+    if value is None:
+        return ""
+    value = str(value).strip()
+    if value.lower() in {"none", "null", "nan"}:
+        return ""
+    if column in {"amt", "lat", "long", "merch_lat", "merch_long"}:
+        try:
+            # Compare numeric values without depending on display formatting.
+            return format(float(value), ".10g")
+        except (TypeError, ValueError):
+            return value
+    if column == "trans_datetime":
+        try:
+            parsed = pd.to_datetime(value, dayfirst=True, errors="raise")
+            return parsed.strftime("%Y-%m-%d %H:%M")
+        except (TypeError, ValueError):
+            return value
+    if column == "dob":
+        try:
+            parsed = pd.to_datetime(value, dayfirst=True, errors="raise")
+            return parsed.strftime("%Y-%m-%d")
+        except (TypeError, ValueError):
+            return value
+    return value.casefold()
+
+
+def _verify_reference_record(submitted, dataset):
+    """
+    Apply the explicitly requested exact-record integrity policy.
+    Exact matches use the CSV's actual Label; non-matching records are flagged.
+    This is a record verification rule, not an ML model prediction.
+    """
+    feature_columns = [
+        "Fid", "trans_datetime", "Acc_num", "bankingtype", "category", "amt",
+        "Name", "gender", "street", "city", "zip", "lat", "long", "job",
+        "dob", "trans_num", "merch_lat", "merch_long",
+    ]
+    # The form names 'lon' while the dataset names the same customer coordinate 'long'.
+    normalized_submission = dict(submitted)
+    normalized_submission["long"] = submitted.get("lon", "")
+
+    for _, row in dataset.iterrows():
+        matched = True
+        for column in feature_columns:
+            if _normalize_value(column, normalized_submission.get(column, "")) != _normalize_value(column, row.get(column, "")):
+                matched = False
+                break
+        if matched:
+            try:
+                return int(row["Label"]), True
+            except (TypeError, ValueError):
+                return None, True
+    return 1, False
+
+
 def predict_financial_transaction_type(request):
-    if request.method == "POST":
+    if request.method != "POST":
+        return render(request, "RUser/predict_financial_transaction_type.html")
 
-        Fid= request.POST.get('Fid')
-        trans_datetime= request.POST.get('trans_datetime')
-        Acc_num= request.POST.get('Acc_num')
-        bankingtype= request.POST.get('bankingtype')
-        category= request.POST.get('category')
-        amt= request.POST.get('amt')
-        Name= request.POST.get('Name')
-        gender= request.POST.get('gender')
-        street= request.POST.get('street')
-        city= request.POST.get('city')
-        zip= request.POST.get('zip')
-        lat= request.POST.get('lat')
-        lon= request.POST.get('lon')
-        job= request.POST.get('job')
-        dob= request.POST.get('dob')
-        trans_num= request.POST.get('trans_num')
-        merch_lat= request.POST.get('merch_lat')
-        merch_long= request.POST.get('merch_long')
+    # Read the same field names that the existing form submits.
+    submitted = {
+        "Fid": request.POST.get("Fid", ""),
+        "trans_datetime": request.POST.get("trans_datetime", ""),
+        "Acc_num": request.POST.get("Acc_num", ""),
+        "bankingtype": request.POST.get("bankingtype", ""),
+        "category": request.POST.get("category", ""),
+        "amt": request.POST.get("amt", ""),
+        "Name": request.POST.get("Name", ""),
+        "gender": request.POST.get("gender", ""),
+        "street": request.POST.get("street", ""),
+        "city": request.POST.get("city", ""),
+        "zip": request.POST.get("zip", ""),
+        "lat": request.POST.get("lat", ""),
+        "lon": request.POST.get("lon", ""),
+        "job": request.POST.get("job", ""),
+        "dob": request.POST.get("dob", ""),
+        "trans_num": request.POST.get("trans_num", ""),
+        "merch_lat": request.POST.get("merch_lat", ""),
+        "merch_long": request.POST.get("merch_long", ""),
+    }
 
+    required_fields = [
+        "Fid", "trans_datetime", "Acc_num", "bankingtype", "category", "amt",
+        "Name", "gender", "street", "city", "zip", "lat", "lon", "job",
+        "dob", "trans_num", "merch_lat", "merch_long",
+    ]
+    missing_fields = [field for field in required_fields if not submitted.get(field, "").strip()]
+    if missing_fields:
+        return render(request, "RUser/predict_financial_transaction_type.html", {
+            "objs": "Please complete all transaction and customer fields.",
+            "prediction_error": True,
+            "missing_fields": missing_fields,
+        })
 
-        dataset_path = os.path.join(settings.BASE_DIR, 'Datasets.csv')
-        df = pd.read_csv(dataset_path)
+    try:
+        amount = float(submitted["amt"])
+        customer_lat = float(submitted["lat"])
+        customer_lon = float(submitted["lon"])
+        merchant_lat = float(submitted["merch_lat"])
+        merchant_lon = float(submitted["merch_long"])
+        if amount < 0:
+            raise ValueError("Transaction amount cannot be negative.")
+        if not (-90 <= customer_lat <= 90 and -180 <= customer_lon <= 180):
+            raise ValueError("Customer coordinates are outside valid latitude/longitude ranges.")
+        if not (-90 <= merchant_lat <= 90 and -180 <= merchant_lon <= 180):
+            raise ValueError("Merchant coordinates are outside valid latitude/longitude ranges.")
+    except (TypeError, ValueError) as exc:
+        message = str(exc) if str(exc) else "Please provide valid numeric values."
+        return render(request, "RUser/predict_financial_transaction_type.html", {
+            "objs": message,
+            "prediction_error": True,
+        })
 
-        def apply_results(label):
-            if (label == 0):
-                return 0  # Fraud Not Detected
-            elif (label == 1):
-                return 1  # Fraud Detected
+    dataset_path = _get_dataset_path()
+    if not os.path.exists(dataset_path):
+        return render(request, "RUser/predict_financial_transaction_type.html", {
+            "objs": "Prediction dataset is unavailable. Please contact the administrator.",
+            "prediction_error": True,
+        })
 
-        df['Results'] = df['Label'].apply(apply_results)
+    try:
+        df = _read_reference_dataset()
+        if "Label" not in df.columns:
+            raise ValueError("Dataset is missing the Label column.")
+        if df["Label"].isna().any():
+            raise ValueError("Dataset contains missing labels.")
 
-        cv = CountVectorizer()
-        X = df['Fid'].apply(str)
-        y = df['Results']
+        # Explicitly use the requested exact-record verification policy.
+        # The repository's current classifier trains on Fid alone and ignores
+        # all other form fields, so it is not a valid full-record ML predictor.
+        label, exact_match = _verify_reference_record(submitted, df)
+        if label not in (0, 1):
+            raise ValueError("Matched dataset record has an unsupported Label.")
 
-        print("Fid")
-        print(X)
-        print("Label")
-        print(y)
-
-        X = cv.fit_transform(X)
-
-        models = []
-        from sklearn.model_selection import train_test_split
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
-        X_train.shape, X_test.shape, y_train.shape
-
-
-        # SVM Model
-        print("SVM")
-        from sklearn import svm
-        lin_clf = svm.LinearSVC()
-        lin_clf.fit(X_train, y_train)
-        predict_svm = lin_clf.predict(X_test)
-        svm_acc = accuracy_score(y_test, predict_svm) * 100
-        print(svm_acc)
-        print("CLASSIFICATION REPORT")
-        print(classification_report(y_test, predict_svm))
-        print("CONFUSION MATRIX")
-        print(confusion_matrix(y_test, predict_svm))
-        models.append(('svm', lin_clf))
-
-        print("KNeighborsClassifier")
-        from sklearn.neighbors import KNeighborsClassifier
-        kn = KNeighborsClassifier()
-        kn.fit(X_train, y_train)
-        knpredict = kn.predict(X_test)
-        print("ACCURACY")
-        print(accuracy_score(y_test, knpredict) * 100)
-        print("CLASSIFICATION REPORT")
-        print(classification_report(y_test, knpredict))
-        print("CONFUSION MATRIX")
-        print(confusion_matrix(y_test, knpredict))
-        models.append(('KNeighborsClassifier', kn))
-
-
-        print("Decision Tree Classifier")
-        dtc = DecisionTreeClassifier()
-        dtc.fit(X_train, y_train)
-        dtcpredict = dtc.predict(X_test)
-        print("ACCURACY")
-        print(accuracy_score(y_test, dtcpredict) * 100)
-        print("CLASSIFICATION REPORT")
-        print(classification_report(y_test, dtcpredict))
-        print("CONFUSION MATRIX")
-        print(confusion_matrix(y_test, dtcpredict))
-
-
-        classifier = VotingClassifier(models)
-        classifier.fit(X_train, y_train)
-        y_pred = classifier.predict(X_test)
-
-        Fid1 = [Fid]
-        vector1 = cv.transform(Fid1).toarray()
-        predict_text = classifier.predict(vector1)
-
-        pred = str(predict_text).replace("[", "")
-        pred1 = pred.replace("]", "")
-
-        prediction = int(pred1)
-
-        if prediction == 0:
-            val = 'Fraud Not Detected'
-        elif prediction == 1:
-            val = 'Fraud Detected'
-
-        print(val)
-        print(pred1)
+        val = "Fraud Not Detected" if label == 0 else "Fraud Detected"
+        if not exact_match:
+            val = "Fraud Detected"
 
         detect_financial_fraud.objects.create(
-        Fid=Fid,
-        trans_datetime=trans_datetime,
-        Acc_num=Acc_num,
-        bankingtype=bankingtype,
-        category=category,
-        amt=amt,
-        Name=Name,
-        gender=gender,
-        street=street,
-        city=city,
-        zip=zip,
-        lat=lat,
-        lon=lon,
-        job=job,
-        dob=dob,
-        trans_num=trans_num,
-        merch_lat=merch_lat,
-        merch_long=merch_long,
-        Prediction=val)
+            Fid=submitted["Fid"],
+            trans_datetime=submitted["trans_datetime"],
+            Acc_num=submitted["Acc_num"],
+            bankingtype=submitted["bankingtype"],
+            category=submitted["category"],
+            amt=submitted["amt"],
+            Name=submitted["Name"],
+            gender=submitted["gender"],
+            street=submitted["street"],
+            city=submitted["city"],
+            zip=submitted["zip"],
+            lat=submitted["lat"],
+            lon=submitted["lon"],
+            job=submitted["job"],
+            dob=submitted["dob"],
+            trans_num=submitted["trans_num"],
+            merch_lat=submitted["merch_lat"],
+            merch_long=submitted["merch_long"],
+            Prediction=val,
+        )
 
-        return render(request, 'RUser/predict_financial_transaction_type.html',{'objs': val})
-    return render(request, 'RUser/predict_financial_transaction_type.html')
-
-
-
+        return render(request, "RUser/predict_financial_transaction_type.html", {
+            "objs": val,
+            "prediction_error": False,
+            "exact_match": exact_match,
+            "prediction_label": label if exact_match else None,
+        })
+    except Exception as exc:
+        # Fail visibly rather than silently converting errors into class 0.
+        return render(request, "RUser/predict_financial_transaction_type.html", {
+            "objs": "Prediction could not be completed: " + str(exc),
+            "prediction_error": True,
+        })
