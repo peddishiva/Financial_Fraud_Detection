@@ -70,12 +70,15 @@ def _get_dataset_path():
 
 
 def _read_reference_dataset():
-    """Read the dataset without converting identifiers such as account numbers to floats."""
-    return pd.read_csv(_get_dataset_path(), dtype={"Acc_num": "string", "zip": "string", "Fid": "string", "trans_num": "string"})
+    """Read reference data while preserving high-cardinality identifier strings."""
+    return pd.read_csv(
+        _get_dataset_path(),
+        dtype={"Acc_num": "string", "zip": "string", "Fid": "string", "trans_num": "string"},
+    )
 
 
 def _normalize_value(column, value):
-    """Normalize values for strict record verification while preserving identifier text."""
+    """Normalize equivalent formatting without losing identifier precision."""
     if value is None:
         return ""
     value = str(value).strip()
@@ -83,20 +86,17 @@ def _normalize_value(column, value):
         return ""
     if column in {"amt", "lat", "long", "merch_lat", "merch_long"}:
         try:
-            # Compare numeric values without depending on display formatting.
             return format(float(value), ".10g")
         except (TypeError, ValueError):
             return value
     if column == "trans_datetime":
         try:
-            parsed = pd.to_datetime(value, dayfirst=True, errors="raise")
-            return parsed.strftime("%Y-%m-%d %H:%M")
+            return pd.to_datetime(value, dayfirst=True, errors="raise").strftime("%Y-%m-%d %H:%M")
         except (TypeError, ValueError):
             return value
     if column == "dob":
         try:
-            parsed = pd.to_datetime(value, dayfirst=True, errors="raise")
-            return parsed.strftime("%Y-%m-%d")
+            return pd.to_datetime(value, dayfirst=True, errors="raise").strftime("%Y-%m-%d")
         except (TypeError, ValueError):
             return value
     return value.casefold()
@@ -104,26 +104,24 @@ def _normalize_value(column, value):
 
 def _verify_reference_record(submitted, dataset):
     """
-    Apply the explicitly requested exact-record integrity policy.
-    Exact matches use the CSV's actual Label; non-matching records are flagged.
-    This is a record verification rule, not an ML model prediction.
+    Exact-record integrity policy requested for this project.
+    This is separate from ML classification: exact matches respect the CSV Label;
+    non-matches are flagged for review as fraud under the strict policy.
     """
     feature_columns = [
         "Fid", "trans_datetime", "Acc_num", "bankingtype", "category", "amt",
         "Name", "gender", "street", "city", "zip", "lat", "long", "job",
         "dob", "trans_num", "merch_lat", "merch_long",
     ]
-    # The form names 'lon' while the dataset names the same customer coordinate 'long'.
     normalized_submission = dict(submitted)
     normalized_submission["long"] = submitted.get("lon", "")
 
     for _, row in dataset.iterrows():
-        matched = True
-        for column in feature_columns:
-            if _normalize_value(column, normalized_submission.get(column, "")) != _normalize_value(column, row.get(column, "")):
-                matched = False
-                break
-        if matched:
+        if all(
+            _normalize_value(column, normalized_submission.get(column, ""))
+            == _normalize_value(column, row.get(column, ""))
+            for column in feature_columns
+        ):
             try:
                 return int(row["Label"]), True
             except (TypeError, ValueError):
@@ -135,7 +133,6 @@ def predict_financial_transaction_type(request):
     if request.method != "POST":
         return render(request, "RUser/predict_financial_transaction_type.html")
 
-    # Read the same field names that the existing form submits.
     submitted = {
         "Fid": request.POST.get("Fid", ""),
         "trans_datetime": request.POST.get("trans_datetime", ""),
@@ -156,13 +153,8 @@ def predict_financial_transaction_type(request):
         "merch_lat": request.POST.get("merch_lat", ""),
         "merch_long": request.POST.get("merch_long", ""),
     }
-
-    required_fields = [
-        "Fid", "trans_datetime", "Acc_num", "bankingtype", "category", "amt",
-        "Name", "gender", "street", "city", "zip", "lat", "lon", "job",
-        "dob", "trans_num", "merch_lat", "merch_long",
-    ]
-    missing_fields = [field for field in required_fields if not submitted.get(field, "").strip()]
+    required_fields = list(submitted.keys())
+    missing_fields = [field for field in required_fields if not submitted[field].strip()]
     if missing_fields:
         return render(request, "RUser/predict_financial_transaction_type.html", {
             "objs": "Please complete all transaction and customer fields.",
@@ -172,10 +164,8 @@ def predict_financial_transaction_type(request):
 
     try:
         amount = float(submitted["amt"])
-        customer_lat = float(submitted["lat"])
-        customer_lon = float(submitted["lon"])
-        merchant_lat = float(submitted["merch_lat"])
-        merchant_lon = float(submitted["merch_long"])
+        customer_lat, customer_lon = float(submitted["lat"]), float(submitted["lon"])
+        merchant_lat, merchant_lon = float(submitted["merch_lat"]), float(submitted["merch_long"])
         if amount < 0:
             raise ValueError("Transaction amount cannot be negative.")
         if not (-90 <= customer_lat <= 90 and -180 <= customer_lon <= 180):
@@ -183,14 +173,12 @@ def predict_financial_transaction_type(request):
         if not (-90 <= merchant_lat <= 90 and -180 <= merchant_lon <= 180):
             raise ValueError("Merchant coordinates are outside valid latitude/longitude ranges.")
     except (TypeError, ValueError) as exc:
-        message = str(exc) if str(exc) else "Please provide valid numeric values."
         return render(request, "RUser/predict_financial_transaction_type.html", {
-            "objs": message,
+            "objs": str(exc) or "Please provide valid numeric values.",
             "prediction_error": True,
         })
 
-    dataset_path = _get_dataset_path()
-    if not os.path.exists(dataset_path):
+    if not os.path.exists(_get_dataset_path()):
         return render(request, "RUser/predict_financial_transaction_type.html", {
             "objs": "Prediction dataset is unavailable. Please contact the administrator.",
             "prediction_error": True,
@@ -198,21 +186,17 @@ def predict_financial_transaction_type(request):
 
     try:
         df = _read_reference_dataset()
-        if "Label" not in df.columns:
-            raise ValueError("Dataset is missing the Label column.")
-        if df["Label"].isna().any():
-            raise ValueError("Dataset contains missing labels.")
+        if "Label" not in df.columns or df["Label"].isna().any():
+            raise ValueError("Dataset is missing valid target labels.")
 
-        # Explicitly use the requested exact-record verification policy.
-        # The repository's current classifier trains on Fid alone and ignores
-        # all other form fields, so it is not a valid full-record ML predictor.
+        # The checked-in ML view trains CountVectorizer on Fid only and then
+        # predicts from Fid only. This ignores the other form values. Until a
+        # properly trained all-feature model is built and evaluated, apply the
+        # explicitly requested strict record-integrity policy instead.
         label, exact_match = _verify_reference_record(submitted, df)
         if label not in (0, 1):
             raise ValueError("Matched dataset record has an unsupported Label.")
-
-        val = "Fraud Not Detected" if label == 0 else "Fraud Detected"
-        if not exact_match:
-            val = "Fraud Detected"
+        val = "Fraud Not Detected" if exact_match and label == 0 else "Fraud Detected"
 
         detect_financial_fraud.objects.create(
             Fid=submitted["Fid"],
@@ -235,7 +219,6 @@ def predict_financial_transaction_type(request):
             merch_long=submitted["merch_long"],
             Prediction=val,
         )
-
         return render(request, "RUser/predict_financial_transaction_type.html", {
             "objs": val,
             "prediction_error": False,
@@ -243,7 +226,7 @@ def predict_financial_transaction_type(request):
             "prediction_label": label if exact_match else None,
         })
     except Exception as exc:
-        # Fail visibly rather than silently converting errors into class 0.
+        # Never silently turn a pipeline error into the legitimate class.
         return render(request, "RUser/predict_financial_transaction_type.html", {
             "objs": "Prediction could not be completed: " + str(exc),
             "prediction_error": True,
