@@ -3,6 +3,7 @@ Regression tests for the strict exact-record integrity policy.
 Run from the directory containing manage.py:
 python manage.py test Remote_User.test_prediction_integrity
 """
+from decimal import Decimal
 from django.test import SimpleTestCase
 from Remote_User.views import _read_reference_dataset, _verify_reference_record
 
@@ -47,6 +48,14 @@ class ReferenceRecordVerificationTests(SimpleTestCase):
         label, matched = _verify_reference_record(self.submitted_from(self.row1), self.dataset)
         self.assertTrue(matched)
         self.assertEqual(label, 1)
+
+    def test_scientific_notation_account_number_matches_expanded_form(self):
+        row = self.row0
+        submitted = self.submitted_from(row)
+        submitted["Acc_num"] = str(int(Decimal(str(row["Acc_num"]))))
+        label, matched = _verify_reference_record(submitted, self.dataset)
+        self.assertTrue(matched)
+        self.assertEqual(label, int(row["Label"]))
 
     def test_changing_amount_makes_record_not_match(self):
         submitted = self.submitted_from(self.row0)
