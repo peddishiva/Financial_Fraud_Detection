@@ -1,10 +1,11 @@
 """
-Regression tests for the exact-reference fraud integrity policy.
-Run with: python manage.py test Remote_User
+Regression tests for the strict exact-record integrity policy.
+Run from the directory containing manage.py:
+python manage.py test Remote_User.test_prediction_integrity
 """
 import pandas as pd
 from django.test import SimpleTestCase
-from Remote_User.views import _normalize_value, _read_reference_dataset, _verify_reference_record
+from Remote_User.views import _read_reference_dataset, _verify_reference_record
 
 
 class ReferenceRecordVerificationTests(SimpleTestCase):
