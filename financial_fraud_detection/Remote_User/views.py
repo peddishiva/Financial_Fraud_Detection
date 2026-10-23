@@ -64,70 +64,6 @@ def ViewYourProfile(request):
     return render(request,'RUser/ViewYourProfile.html',{'object':obj})
 
 
-def _get_dataset_path():
-    """Return the canonical project dataset path."""
-    return os.path.join(settings.BASE_DIR, "Datasets.csv")
-
-
-def _read_reference_dataset():
-    """Read reference data while preserving high-cardinality identifier strings."""
-    return pd.read_csv(
-        _get_dataset_path(),
-        dtype={"Acc_num": "string", "zip": "string", "Fid": "string", "trans_num": "string"},
-    )
-
-
-def _normalize_value(column, value):
-    """Normalize equivalent formatting without losing identifier precision."""
-    if value is None:
-        return ""
-    value = str(value).strip()
-    if value.lower() in {"none", "null", "nan"}:
-        return ""
-    if column in {"amt", "lat", "long", "merch_lat", "merch_long"}:
-        try:
-            return format(float(value), ".10g")
-        except (TypeError, ValueError):
-            return value
-    if column == "trans_datetime":
-        try:
-            return pd.to_datetime(value, dayfirst=True, errors="raise").strftime("%Y-%m-%d %H:%M")
-        except (TypeError, ValueError):
-            return value
-    if column == "dob":
-        try:
-            return pd.to_datetime(value, dayfirst=True, errors="raise").strftime("%Y-%m-%d")
-        except (TypeError, ValueError):
-            return value
-    return value.casefold()
-
-
-def _verify_reference_record(submitted, dataset):
-    """
-    Exact-record integrity policy requested for this project.
-    This is separate from ML classification: exact matches respect the CSV Label;
-    non-matches are flagged for review as fraud under the strict policy.
-    """
-    feature_columns = [
-        "Fid", "trans_datetime", "Acc_num", "bankingtype", "category", "amt",
-        "Name", "gender", "street", "city", "zip", "lat", "long", "job",
-        "dob", "trans_num", "merch_lat", "merch_long",
-    ]
-    normalized_submission = dict(submitted)
-    normalized_submission["long"] = submitted.get("lon", "")
-
-    for _, row in dataset.iterrows():
-        if all(
-            _normalize_value(column, normalized_submission.get(column, ""))
-            == _normalize_value(column, row.get(column, ""))
-            for column in feature_columns
-        ):
-            try:
-                return int(row["Label"]), True
-            except (TypeError, ValueError):
-                return None, True
-    return 1, False
-
 
 def predict_financial_transaction_type(request):
     if request.method != "POST":
@@ -153,8 +89,8 @@ def predict_financial_transaction_type(request):
         "merch_lat": request.POST.get("merch_lat", ""),
         "merch_long": request.POST.get("merch_long", ""),
     }
-    required_fields = list(submitted.keys())
-    missing_fields = [field for field in required_fields if not submitted[field].strip()]
+
+    missing_fields = [field for field, value in submitted.items() if not value.strip()]
     if missing_fields:
         return render(request, "RUser/predict_financial_transaction_type.html", {
             "objs": "Please complete all transaction and customer fields.",
@@ -178,21 +114,11 @@ def predict_financial_transaction_type(request):
             "prediction_error": True,
         })
 
-    if not os.path.exists(_get_dataset_path()):
-        return render(request, "RUser/predict_financial_transaction_type.html", {
-            "objs": "Prediction dataset is unavailable. Please contact the administrator.",
-            "prediction_error": True,
-        })
-
     try:
         df = _read_reference_dataset()
         if "Label" not in df.columns or df["Label"].isna().any():
             raise ValueError("Dataset is missing valid target labels.")
 
-        # The checked-in ML view trains CountVectorizer on Fid only and then
-        # predicts from Fid only. This ignores the other form values. Until a
-        # properly trained all-feature model is built and evaluated, apply the
-        # explicitly requested strict record-integrity policy instead.
         label, exact_match = _verify_reference_record(submitted, df)
         if label not in (0, 1):
             raise ValueError("Matched dataset record has an unsupported Label.")
@@ -226,7 +152,6 @@ def predict_financial_transaction_type(request):
             "prediction_label": label if exact_match else None,
         })
     except Exception as exc:
-        # Never silently turn a pipeline error into the legitimate class.
         return render(request, "RUser/predict_financial_transaction_type.html", {
             "objs": "Prediction could not be completed: " + str(exc),
             "prediction_error": True,
