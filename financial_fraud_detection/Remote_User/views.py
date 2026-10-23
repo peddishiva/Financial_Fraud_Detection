@@ -9,15 +9,7 @@ import openpyxl
 
 import pandas as pd
 
-from sklearn.ensemble import VotingClassifier
-from sklearn.tree import DecisionTreeClassifier
-import warnings
-warnings.filterwarnings("ignore")
 
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-from sklearn.metrics import accuracy_score
-from sklearn.metrics import f1_score
 
 # Create your views here.
 from Remote_User.models import ClientRegister_Model,detect_financial_fraud,detection_ratio,detection_accuracy
