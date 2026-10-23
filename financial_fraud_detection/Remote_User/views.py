@@ -164,6 +164,11 @@ def predict_financial_transaction_type(request):
         df = _read_reference_dataset()
         if "Label" not in df.columns or df["Label"].isna().any():
             raise ValueError("Dataset is missing valid target labels.")
+        # Fail explicitly if an expected feature is missing or mislabeled.
+        expected_columns = {"Fid", "trans_datetime", "Acc_num", "bankingtype", "category", "amt", "Name", "gender", "street", "city", "zip", "lat", "long", "job", "dob", "trans_num", "merch_lat", "merch_long", "Label"}
+        missing_columns = expected_columns.difference(df.columns)
+        if missing_columns:
+            raise ValueError("Dataset is missing columns: " + ", ".join(sorted(missing_columns)))
 
         label, exact_match = _verify_reference_record(submitted, df)
         if label not in (0, 1):
