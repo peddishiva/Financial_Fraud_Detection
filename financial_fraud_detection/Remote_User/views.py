@@ -149,6 +149,8 @@ def predict_financial_transaction_type(request):
         amount = float(submitted["amt"])
         customer_lat, customer_lon = float(submitted["lat"]), float(submitted["lon"])
         merchant_lat, merchant_lon = float(submitted["merch_lat"]), float(submitted["merch_long"])
+        if not all(math.isfinite(value) for value in (amount, customer_lat, customer_lon, merchant_lat, merchant_lon)):
+            raise ValueError("Numeric fields must contain finite numbers.")
         if amount < 0:
             raise ValueError("Transaction amount cannot be negative.")
         if not (-90 <= customer_lat <= 90 and -180 <= customer_lon <= 180):
