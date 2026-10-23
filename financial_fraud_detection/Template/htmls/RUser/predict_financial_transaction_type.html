@@ -142,7 +142,7 @@
 
 
 
-                                      <td width="329" bgcolor="#FFFFFF" style="color:red; font-size:20px; font-family:fantasy" ><div align="center">{{objs}}</div></td></tr>
+                                      <td width="329" bgcolor="#FFFFFF" style="color:{% if prediction_error %}#B91C1C{% else %}#142235{% endif %}; font-size:20px; font-family:Arial,sans-serif" ><div align="center" role="status" aria-live="polite">{{ objs|default:"No prediction yet" }}</div></td></tr>
                       </table>
 
 
