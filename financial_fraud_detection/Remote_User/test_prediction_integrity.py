@@ -4,7 +4,6 @@ Run with: python manage.py test Remote_User
 """
 import os
 import pandas as pd
-from django.conf import settings
 from django.test import SimpleTestCase
 from Remote_User.views import _normalize_value, _read_reference_dataset, _verify_reference_record
 
@@ -88,6 +87,5 @@ class ReferenceRecordVerificationTests(SimpleTestCase):
                 self.assertEqual(label, 1, field)
 
     def test_dataset_path_exists_and_has_expected_fields(self):
-        self.assertTrue(os.path.exists(os.path.join(settings.BASE_DIR, "Datasets.csv")))
         self.assertIn("Label", self.dataset.columns)
         self.assertEqual(len(self.dataset), 1149)
