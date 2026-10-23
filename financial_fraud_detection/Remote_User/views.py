@@ -56,19 +56,19 @@ def ViewYourProfile(request):
     return render(request,'RUser/ViewYourProfile.html',{'object':obj})
 
 
-
 def _get_dataset_path():
     return os.path.join(settings.BASE_DIR, "Datasets.csv")
 
 
 def _read_reference_dataset():
+    # Preserve identifiers as strings to avoid account-number precision loss.
     return pd.read_csv(
         _get_dataset_path(),
         dtype={"Acc_num": "string", "zip": "string", "Fid": "string", "trans_num": "string"},
     )
 
 
-def _normalize_value(column, value):
+def _normalize_reference_value(column, value):
     if value is None:
         return ""
     value = str(value).strip()
@@ -79,20 +79,18 @@ def _normalize_value(column, value):
             return format(float(value), ".10g")
         except (TypeError, ValueError):
             return value
-    if column == "trans_datetime":
+    if column in {"trans_datetime", "dob"}:
         try:
-            return pd.to_datetime(value, dayfirst=True, errors="raise").strftime("%Y-%m-%d %H:%M")
-        except (TypeError, ValueError):
-            return value
-    if column == "dob":
-        try:
-            return pd.to_datetime(value, dayfirst=True, errors="raise").strftime("%Y-%m-%d")
+            return pd.to_datetime(value, dayfirst=True, errors="raise").strftime(
+                "%Y-%m-%d %H:%M" if column == "trans_datetime" else "%Y-%m-%d"
+            )
         except (TypeError, ValueError):
             return value
     return value.casefold()
 
 
 def _verify_reference_record(submitted, dataset):
+    """Strict record-integrity policy; this is not a trained ML prediction."""
     columns = [
         "Fid", "trans_datetime", "Acc_num", "bankingtype", "category", "amt",
         "Name", "gender", "street", "city", "zip", "lat", "long", "job",
@@ -102,7 +100,8 @@ def _verify_reference_record(submitted, dataset):
     form["long"] = submitted.get("lon", "")
     for _, row in dataset.iterrows():
         if all(
-            _normalize_value(col, form.get(col, "")) == _normalize_value(col, row.get(col, ""))
+            _normalize_reference_value(col, form.get(col, "")) ==
+            _normalize_reference_value(col, row.get(col, ""))
             for col in columns
         ):
             try:
@@ -137,12 +136,12 @@ def predict_financial_transaction_type(request):
         "merch_long": request.POST.get("merch_long", ""),
     }
 
-    missing_fields = [field for field, value in submitted.items() if not value.strip()]
-    if missing_fields:
+    missing = [name for name, value in submitted.items() if not value.strip()]
+    if missing:
         return render(request, "RUser/predict_financial_transaction_type.html", {
             "objs": "Please complete all transaction and customer fields.",
             "prediction_error": True,
-            "missing_fields": missing_fields,
+            "missing_fields": missing,
         })
 
     try:
@@ -169,7 +168,10 @@ def predict_financial_transaction_type(request):
         label, exact_match = _verify_reference_record(submitted, df)
         if label not in (0, 1):
             raise ValueError("Matched dataset record has an unsupported Label.")
-        val = "Fraud Not Detected" if exact_match and label == 0 else "Fraud Detected"
+
+        # Exact matches respect the dataset's own label. Unmatched records are
+        # flagged by the explicitly requested strict integrity policy.
+        prediction = "Fraud Not Detected" if exact_match and label == 0 else "Fraud Detected"
 
         detect_financial_fraud.objects.create(
             Fid=submitted["Fid"],
@@ -190,15 +192,16 @@ def predict_financial_transaction_type(request):
             trans_num=submitted["trans_num"],
             merch_lat=submitted["merch_lat"],
             merch_long=submitted["merch_long"],
-            Prediction=val,
+            Prediction=prediction,
         )
         return render(request, "RUser/predict_financial_transaction_type.html", {
-            "objs": val,
+            "objs": prediction,
             "prediction_error": False,
             "exact_match": exact_match,
             "prediction_label": label if exact_match else None,
         })
     except Exception as exc:
+        # Never conceal a dataset or prediction-path failure as a legitimate result.
         return render(request, "RUser/predict_financial_transaction_type.html", {
             "objs": "Prediction could not be completed: " + str(exc),
             "prediction_error": True,
